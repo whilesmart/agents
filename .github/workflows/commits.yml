@@ -1,0 +1,39 @@
+name: Commit message validation
+on:
+  pull_request:
+    branches: [main, dev]
+  push:
+    branches: [main, dev]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: range
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        shell: bash
+        run: |
+          if [[ -n "$BASE_SHA" && ! "$BASE_SHA" =~ ^0+$ ]]; then
+            printf 'from=%s\n' "$BASE_SHA" >> "$GITHUB_OUTPUT"
+          elif git rev-parse --verify HEAD^ >/dev/null 2>&1; then
+            printf 'from=HEAD^\n' >> "$GITHUB_OUTPUT"
+          else
+            printf 'initial=true\n' >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.range.outputs.initial != 'true'
+        uses: whilesmart/workflows/commits@main
+        with:
+          from: ${{ steps.range.outputs.from }}
+          to: HEAD
+      - name: Validate initial commit
+        if: steps.range.outputs.initial == 'true'
+        shell: bash
+        run: |
+          subject=$(git log -1 --format=%s)
+          test "${#subject}" -le 80
+          [[ "$subject" =~ ^(feat|fix|refactor|docs|ui|test)(\([^\)]+\))?:\ [A-Z].+ ]]

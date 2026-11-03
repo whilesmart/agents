@@ -1,0 +1,32 @@
+name: CI
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  qa:
+    name: QA (${{ matrix.go }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        go: ['1.24.3', stable]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go }}
+          cache-dependency-path: go.sum
+      - run: bash scripts/check.sh
+      - name: Check module tidiness
+        run: |
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.go }}
+          path: coverage.out
