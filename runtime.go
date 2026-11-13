@@ -13,6 +13,12 @@ var ErrContextLimit = errors.New("agent context limit exceeded")
 var ErrBudget = errors.New("agent budget exhausted")
 var ErrIncomplete = errors.New("agent response is incomplete")
 var ErrWaiting = errors.New("agent action requires approval or reconciliation")
+var ErrStepCeiling = errors.New("agent reached the step ceiling before completing")
+
+// MaxSteps is the upper bound on Limits.Steps. It is a runaway safety ceiling,
+// not a usage governor: set it high enough that real multi-resource work never
+// reaches it.
+const MaxSteps = 512
 
 type Usage struct {
 	InputTokens  int64 `json:"input_tokens"`
@@ -98,7 +104,7 @@ type Result struct {
 
 func (r Runtime) Run(ctx context.Context, runID, attemptID string, messages []Message) (result Result, err error) {
 	l := r.Limits
-	if r.Model == nil || r.Host == nil || strings.TrimSpace(runID) == "" || strings.TrimSpace(attemptID) == "" || l.Steps < 1 || l.Steps > 32 || l.OutputTokens < 1 || l.TotalTokens < int64(l.OutputTokens) || l.ContextBytes < 1 {
+	if r.Model == nil || r.Host == nil || strings.TrimSpace(runID) == "" || strings.TrimSpace(attemptID) == "" || l.Steps < 1 || l.Steps > MaxSteps || l.OutputTokens < 1 || l.TotalTokens < int64(l.OutputTokens) || l.ContextBytes < 1 {
 		return result, errors.New("invalid agent runtime configuration")
 	}
 	messages = append([]Message(nil), messages...)
@@ -253,5 +259,5 @@ func (r Runtime) Run(ctx context.Context, runID, attemptID string, messages []Me
 			messages = append(messages, Message{Role: "tool", CallID: call.ID, Content: string(data)})
 		}
 	}
-	return result, ErrBudget
+	return result, ErrStepCeiling
 }
