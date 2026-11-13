@@ -63,6 +63,19 @@ func TestToolExecutionAndReceipt(t *testing.T) {
 		t.Fatalf("%+v %v", result, err)
 	}
 }
+func TestStepCeilingReturnsDistinctError(t *testing.T) {
+	h := &host{result: ToolResult{State: "succeeded", Output: json.RawMessage(`{"ok":true}`)}}
+	m := modelFunc(func(_ context.Context, _ Request) (Response, error) {
+		return Response{Complete: true, Usage: &Usage{InputTokens: 1}, Calls: []Call{{ID: "call", Name: "save", Arguments: json.RawMessage(`{"title":"again"}`)}}}, nil
+	})
+	_, err := instance(h, m).Run(context.Background(), "run", "attempt", []Message{{Role: "user", Content: "Loop"}})
+	if !errors.Is(err, ErrStepCeiling) {
+		t.Fatalf("expected ErrStepCeiling, got %v", err)
+	}
+	if errors.Is(err, ErrBudget) {
+		t.Fatal("step exhaustion must not report as ErrBudget")
+	}
+}
 func TestValidateWholeBatchBeforeAnySideEffect(t *testing.T) {
 	for _, argument := range []string{`{"title":12}`, `{}`, `{"title":"valid","unknown":true}`} {
 		h := &host{}
